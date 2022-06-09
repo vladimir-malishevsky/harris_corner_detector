@@ -10,7 +10,8 @@ SOBEL_X = np.array(
         [-1, 0, 1],
         [-2, 0, 2],
         [-1, 0, 1]
-    ), dtype="int32")
+    ), dtype="int32"
+)
 
 # Sobel y-axis kernel
 SOBEL_Y = np.array(
@@ -18,7 +19,8 @@ SOBEL_Y = np.array(
         [-1, -2, -1],
         [0, 0, 0],
         [1, 2, 1]
-    ), dtype="int32")
+    ), dtype="int32"
+)
 
 # Gaussian kernel
 GAUSS = np.array(
@@ -26,7 +28,8 @@ GAUSS = np.array(
         [1 / 16, 2 / 16, 1 / 16],
         [2 / 16, 4 / 16, 2 / 16],
         [1 / 16, 2 / 16, 1 / 16]
-    ), dtype="float64")
+    ), dtype="float64"
+)
 
 
 def harris_detector(gray, window_size=5, k=0.03, threshold=0.2):
@@ -101,25 +104,34 @@ def match_descriptors(desctriptors1, desctriptors2):
     Returns:
         returns some poop
     """
+    matches = [[], []]
 
     for desc1, desc1_y, desc1_x in desctriptors1:
         distances = []
+        desc2_y, desc2_x = 0, 0
         for desc2, desc2_y, desc2_x in desctriptors2:
             square = np.square(desc1 - desc2)
             sum_square = np.sum(square)
             distance = np.sqrt(sum_square)
-            distances.append(distance)
+            distances.append([distance, desc2_y, desc2_x])
         # print(f'Y: {desc1_y}; X: {desc1_x};')
         # print(distances)
-        distances.sort()
+        distances.sort(key=lambda l: l[0])
+
         last_item = distances[0]
         before_last_item = distances[1]
-        result = last_item / before_last_item
-        print(f'Y: {desc1_y}; X: {desc1_x};')
+        result = last_item[0] / before_last_item[0]
+
         if result < 0.8:
-            print(f'True')
-        else:
-            print(f'False')
+            matches[0].append([desc1_y, desc1_x])
+            matches[1].append([last_item[1], last_item[2]])
+
+        # print(f'Y: {desc1_y}; X: {desc1_x};')
+        # if result < 0.8:
+        #     print(f'True')
+        # else:
+        #     print(f'False')
+    return matches
 
 
 
