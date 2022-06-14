@@ -3,6 +3,7 @@ import numpy as np
 import skimage
 
 import matplotlib.pyplot as plt
+from numpy.random import randint
 
 default_window_size = 5
 default_k = 0.04
@@ -35,8 +36,27 @@ GAUSS = np.array(
     ), dtype="float64"
 )
 
+colors = [
+    (255, 255, 255),  # White
+    (255, 0, 0),  # Red
+    (0, 255, 0),  # Lime
+    (0, 0, 255),  # Blue
+    (255, 255, 0),  # Yellow
+    (0, 255, 255),  # Cyan
+    (255, 0, 255),  # Magenta
+    (192, 192, 192),  # Silver
+    (128, 128, 128),  # Gray
+    (128, 0, 0),  # Maroon
+    (128, 128, 0),  # Olive
+    (0, 128, 0),  # Green
+    (128, 0, 128),  # Purple
+    (0, 128, 128),  # Teal
+    (0, 0, 128)  # Navy
+]
 
-def harris_detector(gray, window_size=default_window_size, k=default_k, threshold=default_threshold, nms_min_distance=5):
+
+def harris_detector(gray, window_size=default_window_size, k=default_k, threshold=default_threshold,
+                    nms_min_distance=5):
     """
     My own harris detector function
     Arguments:
@@ -54,93 +74,87 @@ def harris_detector(gray, window_size=default_window_size, k=default_k, threshol
     # gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Переводимо зображення У відтінки сірого
     #
     img_gaussian = cv2.GaussianBlur(gray, (window_size, window_size), 0.5)  # Згорткою шукаємо Ix, Iy через DoG
-    # print(f'{image_path}: Пошук похідних...')
+    print('Пошук похідних...')
     dx = convolve(img_gaussian, SOBEL_X)  # Похідна по X
     dy = convolve(img_gaussian, SOBEL_Y)  # Похідна по Y
-    # print(f'{image_path}: Квадрат похідних...')
+    print('Квадрат похідних...')
     # Квадрат похідних
     dx2 = np.square(dx)
     dy2 = np.square(dy)
     dxy = dx * dy  # перехресна фільтрація
-    # print(f'{image_path}: Обробка гаусом...')
+    print('Обробка гаусом...')
     # g_dx2 = convolve(dx2, GAUSS)
     # g_dy2 = convolve(dy2, GAUSS)
     # g_dxy = convolve(dxy, GAUSS)
     g_dx2 = cv2.GaussianBlur(dx2, (5, 5), 1)
     g_dy2 = cv2.GaussianBlur(dy2, (5, 5), 1)
     g_dxy = cv2.GaussianBlur(dxy, (5, 5), 1)
-    # print(f'{image_path}: Шукаємо кути...')
+
+    print('Шукаємо кути...')
     # Детектор Харріса r(harris) = det - k*(trace**2)
     trace = g_dx2 + g_dy2
     determinant = g_dx2 * g_dy2 - np.square(g_dxy)
     harris = determinant - k * np.square(trace)
-    # print(f'{image_path}: Нормалізуємо...')
 
-    # harris = [[x if x >= 0 else 0 for x in row] for row in harris]
-    # harris = np.array(harris)
 
-    harris = np.maximum(harris, 0)
+    print('Відсікаємо від`ємні значення...')
+    harris = np.maximum(harris, 0)  # замінюємо x <= 0 на 0
 
+    print('Нормалізуємо...')
     harris = cv2.normalize(harris, harris, 0, 1, cv2.NORM_MINMAX)  # нормалізуємо матрицю (0-1)
 
-    # loc = np.where(harris >= threshold)  # фільтруємо матрицю
-    #
-    # for pt in zip(*loc[::-1]):
-    #     cv2.circle(img, pt, 3, (0, 0, 255), -1)
-    # print(f'{image_path}: Придушуємо не максимуми...')
+    print('Придушуємо не максимуми...')
     corners = skimage.feature.peak_local_max(harris, min_distance=nms_min_distance, threshold_abs=np.max(harris) * 0.01)
 
-    # print(f'{image_path}: Малюємо кути...')
-
-    # for y, x in corners:
-    #     cv2.line(gray, (x - 4, y), (x + 4, y), (0, 0, 255), 1)
-    #     cv2.line(gray, (x, y - 4), (x, y + 4), (0, 0, 255), 1)
-    # cv2.imshow('', gray)
-    # cv2.waitKey()
-
-    # cv2.imwrite('gg.jpg', img)
-
-    # print(f'{image_path}: Готово!')
-    # cv2.imshow('', gray)
-    # cv2.waitKey()
-
-    # patch_descriptors(gray, corners)
-
-    # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)), plt.title("harris detector")
-    # plt.waitforbuttonpress()
-    # return harris, dx, dy, g_dx2, g_dy2, corners
     return corners
 
 
 # def drawMatches(img1, img2, matches):
-def drawMatches(img1, img2, matches):
+def draw_matches(img1, img2, matches):
     offset = img1.shape[1]
     concat = np.concatenate((img1, img2), axis=1)
 
-    for y1, x1 in matches[0]:
-        cv2.line(concat, (x1 - 4, y1), (x1 + 4, y1), (0, 0, 255), 1)
-        cv2.line(concat, (x1, y1 - 4), (x1, y1 + 4), (0, 0, 255), 1)
+    color = _random_color()
 
-    for y2, x2 in matches[1]:
-        cv2.line(concat, (x2 - 4 + offset, y2), (x2 + 4 + offset, y2), (0, 0, 255), 1)
-        cv2.line(concat, (x2 + offset, y2 - 4), (x2 + offset, y2 + 4), (0, 0, 255), 1)
+    for [y1, x1], [y2, x2] in matches:
+        cv2.line(concat, (x1 - 4, y1), (x1 + 4, y1), color, 2)
+        cv2.line(concat, (x1, y1 - 4), (x1, y1 + 4), color, 2)
 
-    for y1, x1 in matches[0]:
-        cv2.line(concat, (x1 - 4, y1), (x1 + 4, y1), (0, 0, 255), 1)
-        cv2.line(concat, (x1, y1 - 4), (x1, y1 + 4), (0, 0, 255), 1)
+        cv2.line(concat, (x2 - 4 + offset, y2), (x2 + 4 + offset, y2), color, 2)
+        cv2.line(concat, (x2 + offset, y2 - 4), (x2 + offset, y2 + 4), color, 2)
 
-        for y2, x2 in matches[1]:
-            cv2.line(concat, (x2 - 4 + offset, y2), (x2 + 4 + offset, y2), (0, 0, 255), 1)
-            cv2.line(concat, (x2 + offset, y2 - 4), (x2 + offset, y2 + 4), (0, 0, 255), 1)
-
-            cv2.line(concat, (x1, y1), (x2 + offset, y2), (0, 0, 255), 1)
-
-    # for y, x in corners:
-    #     cv2.line(concat, (x - 4, y), (x + 4, y), (0, 0, 255), 1)
-    #     cv2.line(concat, (x, y - 4), (x, y + 4), (0, 0, 255), 1)
+        cv2.line(concat, (x1, y1), (x2 + offset, y2), color, 2)
+        color = _random_color()
 
     cv2.imshow('', concat)
-    pass
+
+
+# def drawMatches_offset(img1, img2, matches):
+#     offset_x = img1.shape[1]
+#
+#     prepared_img1 = np.concatenate((img1, np.full_like(img2, 0)))
+#     prepared_img2 = np.concatenate((np.full_like(img1, 0), img2))
+#     cv2.imshow('', np.concatenate((prepared_img1, prepared_img2), axis=1))
+#     cv2.waitKey()
+#     exit()
+#     prepared_img1 = np.pad()
+#     concat = np.concatenate((img1, img2), axis=1)
+#
+#     color = _random_color()
+#
+#     for [y1, x1], [y2, x2] in matches:
+#         cv2.line(concat, (x1 - 4, y1), (x1 + 4, y1), color, 2)
+#         cv2.line(concat, (x1, y1 - 4), (x1, y1 + 4), color, 2)
+#
+#         cv2.line(concat, (x2 - 4 + offset_x, y2), (x2 + 4 + offset_x, y2), color, 2)
+#         cv2.line(concat, (x2 + offset_x, y2 - 4), (x2 + offset_x, y2 + 4), color, 2)
+#
+#         cv2.line(concat, (x1, y1), (x2 + offset_x, y2), color, 2)
+#         color = _random_color()
+#
+#     cv2.imshow('', concat)
+#     cv2.waitKey()
+
 
 
 def match_descriptors(desctriptors1, desctriptors2):
@@ -152,7 +166,7 @@ def match_descriptors(desctriptors1, desctriptors2):
     Returns:
         returns some poop
     """
-    matches = [[], []]
+    matches = []
 
     for desc1, desc1_y, desc1_x in desctriptors1:
         distances = []
@@ -173,8 +187,9 @@ def match_descriptors(desctriptors1, desctriptors2):
         result = last_item[0] / before_last_item[0]
 
         if result < 0.8:
-            matches[0].append([desc1_y, desc1_x])
-            matches[1].append([last_item[1], last_item[2]])
+            # matches.append([desc1_y, desc1_x])
+            # matches.append([last_item[1], last_item[2]])
+            matches.append([[desc1_y, desc1_x], [last_item[1], last_item[2]]])
 
         # print(f'Y: {desc1_y}; X: {desc1_x};')
         # if result < 0.8:
@@ -199,7 +214,7 @@ def patch_descriptors(gray, corners, window_size=default_window_size):
     g_img_width = gray.shape[1]
     pad = window_size // 2
 
-    p_gray = np.pad(gray, (pad,), 'symmetric')  # розширюємо зображення та заповнюємо його симетричними числами
+    p_gray = np.pad(gray, (pad,), 'constant')  # розширюємо зображення та заповнюємо його 0
 
     descriptors = []
 
@@ -270,6 +285,14 @@ def convolve(img, kernel):
 def grayscale(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
+
+def _color_generator():
+    for color in colors:
+        yield color
+
+
+def _random_color():
+    return colors[randint(0, len(colors) - 1)]
 # def harris_detector(image_path, window_size=5, k=0.03, threshold=0.2):
 #     """
 #     My own harris detector function

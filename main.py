@@ -26,19 +26,20 @@ descriptors_other_image = own.patch_descriptors(grayscale_other_img, other_img_c
 
 matches = own.match_descriptors(descriptors_original_image, descriptors_other_image)
 
-own.drawMatches(original_img, other_img, matches)
-
-print(matches)
-# cv2.imshow(f'Corners', own.add_markers(original_img, original_img_corners))
-# cv2.imshow(f'Corners', cv2.drawMatches(original_img, matches[0], original_img, matches[1]))
+own.draw_matches(original_img, other_img, matches)
 
 
-original_with_markers = own.add_markers(original_img, matches[0])
-other_with_markers = own.add_markers(other_img, matches[1])
-
-cv2.imshow(f'Original: {original_with_markers.shape[0]}x{original_with_markers.shape[1]}', original_with_markers)
-cv2.imshow(f'Other: {other_with_markers.shape[0]}x{other_with_markers.shape[1]}', other_with_markers)
+# print(matches)
+cv2.imshow(f'Corners', own.add_markers(original_img, original_img_corners))
 cv2.waitKey()
+
+
+# original_with_markers = own.add_markers(original_img, matches[0])
+# other_with_markers = own.add_markers(other_img, matches[1])
+#
+# cv2.imshow(f'Original: {original_with_markers.shape[0]}x{original_with_markers.shape[1]}', original_with_markers)
+# cv2.imshow(f'Other: {other_with_markers.shape[0]}x{other_with_markers.shape[1]}', other_with_markers)
+# cv2.waitKey()
 
 # cv2.imshow('Original', own.add_markers(original_img, original_img_corners))
 # cv2.imshow('Other', own.add_markers(other_img, other_img_corners))
