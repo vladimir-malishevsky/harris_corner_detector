@@ -1,29 +1,37 @@
 import cv2
 import numpy as np
+import scipy as sp
+from scipy import signal as signal
+from scipy.ndimage import gaussian_filter
 import skimage
 
 import matplotlib.pyplot as plt
 from numpy.random import randint
 
-default_window_size = 5
-default_k = 0.04
-default_threshold = 0.2
+WINDOW_SIZE = 21
+K = 0.04
+SIGMA = 0.2
+THRESHOLD = 0.2
+NMS_MIN_DISTANCE = 5
+
+MARKER_COLOR = (0, 0, 255)  # Колір маркерів (червоний)
+MARKER_THICKNESS = 1  # Товщина маркерів
 
 # Sobel x-axis kernel
-SOBEL_X = np.array(
+FILTER_X = np.array(
     (
         [-1, 0, 1],
-        [-2, 0, 2],
+        [-1, 0, 1],
         [-1, 0, 1]
     ), dtype="int32"
 )
 
 # Sobel y-axis kernel
-SOBEL_Y = np.array(
+FILTER_Y = np.array(
     (
-        [-1, -2, -1],
+        [-1, -1, -1],
         [0, 0, 0],
-        [1, 2, 1]
+        [1, 1, 1]
     ), dtype="int32"
 )
 
@@ -36,7 +44,7 @@ GAUSS = np.array(
     ), dtype="float64"
 )
 
-colors = [
+COLORS = [
     (255, 255, 255),  # White
     (255, 0, 0),  # Red
     (0, 255, 0),  # Lime
@@ -55,47 +63,75 @@ colors = [
 ]
 
 
-def harris_detector(gray, window_size=default_window_size, k=default_k, threshold=default_threshold,
-                    nms_min_distance=5):
+def harris_detector(img: np.ndarray, window_size: int = WINDOW_SIZE,
+                    k: int = K, sigma1: float = SIGMA,
+                    threshold: int = None, nms_min_distance: int = NMS_MIN_DISTANCE) -> np.ndarray:
     """
-    My own harris detector function
+    Функція пошуку точок інтересу (кутів)
     Arguments:
-        :param gray: image
-        :param window_size: window size image
-        :param k: empirical coefficient
-        :param threshold: the value of the constraints for threshold filtering angles
-        :param nms_min_distance:
+        :param img: зображення I
+        :param window_size: розмір вікна w(y, x)
+        :param k: емпіричний коефіцієнт
+        :param sigma1: сигма для пошуку похідних Ix, Iy
+        :param sigma2: сигма для пошуку Sxx, Syy, Sxy
+        :param threshold: коефіцієнт порогової фільтрації
+        :param nms_min_distance: дистанція між максимумами
     Returns:
-        returns some poop
+        corners (np.ndarray): массив з координатами точок інтересу
     """
-    if window_size % 2 != 1:
-        raise ValueError("Розмір вікна має бути непарним!")
-    # print(f'{image_path}: Переводимо зображення У відтінки сірого...')
-    # gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Переводимо зображення У відтінки сірого
-    #
-    img_gaussian = cv2.GaussianBlur(gray, (window_size, window_size), 0.5)  # Згорткою шукаємо Ix, Iy через DoG
+
+    print('Переводимо зображення У відтінки сірого...')
+
+    grayscale = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2GRAY)
+
+    img_gaussian = cv2.GaussianBlur(grayscale, (window_size, window_size), sigma1)
+
     print('Пошук похідних...')
-    dx = convolve(img_gaussian, SOBEL_X)  # Похідна по X
-    dy = convolve(img_gaussian, SOBEL_Y)  # Похідна по Y
+    Ix = convolve(img_gaussian, FILTER_X)  # Похідна по X
+    Iy = convolve(img_gaussian, FILTER_Y)  # Похідна по Y
+
+    # dx = signal.convolve2d(img_gaussian, [-1, 0, 1], mode='same')
+    # dy = signal.convolve2d(img_gaussian, [[-1], [0], [1]], mode='same')
+
+    # Ix = gaussian_filter(grayscale, order=[0, 1], sigma=sigma1, truncate=trunc1)
+    # Iy = gaussian_filter(grayscale, order=[1, 0], sigma=sigma2, truncate=trunc1)
+
+    # Ix = signal.convolve2d(img_gaussian, [[-1, 0, 1]], mode='same')
+    # Iy = signal.convolve2d(img_gaussian, [[-1], [0], [1]], mode='same')
+
     print('Квадрат похідних...')
     # Квадрат похідних
-    dx2 = np.square(dx)
-    dy2 = np.square(dy)
-    dxy = dx * dy  # перехресна фільтрація
+    Ixx = np.square(Ix)
+    Iyy = np.square(Iy)
+    Ixy = Ix * Iy  # перехресна фільтрація
     print('Обробка гаусом...')
     # g_dx2 = convolve(dx2, GAUSS)
     # g_dy2 = convolve(dy2, GAUSS)
     # g_dxy = convolve(dxy, GAUSS)
-    g_dx2 = cv2.GaussianBlur(dx2, (5, 5), 1)
-    g_dy2 = cv2.GaussianBlur(dy2, (5, 5), 1)
-    g_dxy = cv2.GaussianBlur(dxy, (5, 5), 1)
+    # g_dx2 = cv2.GaussianBlur(dx2, (5, 5), 1)
+    # g_dy2 = cv2.GaussianBlur(dy2, (5, 5), 1)
+    # g_dxy = cv2.GaussianBlur(dxy, (5, 5), 1)
+    #
+    # Sxx = gaussian_filter(Ixx, 0.6)
+    # Syy = gaussian_filter(Iyy, 0.6)
+    # Sxy = gaussian_filter(Ixy, 0.6)
+    Sxx = convolve(Ixx, GAUSS)
+    Syy = convolve(Iyy, GAUSS)
+    Sxy = convolve(Ixy, GAUSS)
+
+    # Sxx = gaussian_filter(Ixx, sigma=sigma2, truncate=trunc2)
+    # Syy = gaussian_filter(Iyy, sigma=sigma2, truncate=trunc2)
+    # Sxy = gaussian_filter(Ixy, sigma=sigma2, truncate=trunc2)
+
+    # Sxx = signal.convolve2d(grayscale, h, mode='same')
+    # Syy = signal.convolve2d(grayscale, h, mode='same')
+    # Sxy = signal.convolve2d(grayscale, h, mode='same')
 
     print('Шукаємо кути...')
     # Детектор Харріса r(harris) = det - k*(trace**2)
-    trace = g_dx2 + g_dy2
-    determinant = g_dx2 * g_dy2 - np.square(g_dxy)
+    trace = Sxx + Syy
+    determinant = Sxx * Syy - np.square(Sxy)
     harris = determinant - k * np.square(trace)
-
 
     print('Відсікаємо від`ємні значення...')
     harris = np.maximum(harris, 0)  # замінюємо x <= 0 на 0
@@ -104,57 +140,31 @@ def harris_detector(gray, window_size=default_window_size, k=default_k, threshol
     harris = cv2.normalize(harris, harris, 0, 1, cv2.NORM_MINMAX)  # нормалізуємо матрицю (0-1)
 
     print('Придушуємо не максимуми...')
-    corners = skimage.feature.peak_local_max(harris, min_distance=nms_min_distance, threshold_abs=np.max(harris) * 0.01)
+    threshold = threshold if threshold else np.max(harris) * 0.01
+    corners = skimage.feature.peak_local_max(
+        harris,
+        min_distance=nms_min_distance,
+        threshold_abs=threshold
+    )
 
     return corners
 
 
-# def drawMatches(img1, img2, matches):
 def draw_matches(img1, img2, matches):
     offset = img1.shape[1]
-    concat = np.concatenate((img1, img2), axis=1)
-
     color = _random_color()
 
+    concat = np.concatenate((img1, img2), axis=1)
+
     for [y1, x1], [y2, x2] in matches:
-        cv2.line(concat, (x1 - 4, y1), (x1 + 4, y1), color, 2)
-        cv2.line(concat, (x1, y1 - 4), (x1, y1 + 4), color, 2)
-
-        cv2.line(concat, (x2 - 4 + offset, y2), (x2 + 4 + offset, y2), color, 2)
-        cv2.line(concat, (x2 + offset, y2 - 4), (x2 + offset, y2 + 4), color, 2)
-
+        draw_marker(concat, (x1, y1), color, 2)
+        draw_marker(concat, (x2 + offset, y2), color, 2)
         cv2.line(concat, (x1, y1), (x2 + offset, y2), color, 2)
         color = _random_color()
 
+    cv2.putText(concat, f'Matches: {len(matches)}', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
     cv2.imshow('', concat)
-
-
-# def drawMatches_offset(img1, img2, matches):
-#     offset_x = img1.shape[1]
-#
-#     prepared_img1 = np.concatenate((img1, np.full_like(img2, 0)))
-#     prepared_img2 = np.concatenate((np.full_like(img1, 0), img2))
-#     cv2.imshow('', np.concatenate((prepared_img1, prepared_img2), axis=1))
-#     cv2.waitKey()
-#     exit()
-#     prepared_img1 = np.pad()
-#     concat = np.concatenate((img1, img2), axis=1)
-#
-#     color = _random_color()
-#
-#     for [y1, x1], [y2, x2] in matches:
-#         cv2.line(concat, (x1 - 4, y1), (x1 + 4, y1), color, 2)
-#         cv2.line(concat, (x1, y1 - 4), (x1, y1 + 4), color, 2)
-#
-#         cv2.line(concat, (x2 - 4 + offset_x, y2), (x2 + 4 + offset_x, y2), color, 2)
-#         cv2.line(concat, (x2 + offset_x, y2 - 4), (x2 + offset_x, y2 + 4), color, 2)
-#
-#         cv2.line(concat, (x1, y1), (x2 + offset_x, y2), color, 2)
-#         color = _random_color()
-#
-#     cv2.imshow('', concat)
-#     cv2.waitKey()
-
 
 
 def match_descriptors(desctriptors1, desctriptors2):
@@ -176,45 +186,36 @@ def match_descriptors(desctriptors1, desctriptors2):
             sum_square = np.sum(square)
             distance = np.sqrt(sum_square)
             distances.append([distance, desc2_y, desc2_x])
-            # distances.append(distance)
-        # print(f'Y: {desc1_y}; X: {desc1_x};')
-        # print(distances)
+
+        if not distances:
+            continue
+
         distances.sort(key=lambda l: l[0])
-        # distances.sort()
 
         last_item = distances[0]
         before_last_item = distances[1]
         result = last_item[0] / before_last_item[0]
 
         if result < 0.8:
-            # matches.append([desc1_y, desc1_x])
-            # matches.append([last_item[1], last_item[2]])
             matches.append([[desc1_y, desc1_x], [last_item[1], last_item[2]]])
 
-        # print(f'Y: {desc1_y}; X: {desc1_x};')
-        # if result < 0.8:
-        #     print(f'True')
-        # else:
-        #     print(f'False')
     return matches
 
 
-def patch_descriptors(gray, corners, window_size=default_window_size):
+def patch_descriptors(grayscale: np.ndarray, corners: np.ndarray, window_size=WINDOW_SIZE):
     """
-    Пошук патч дескрипторів
+    Пошук патч дескрипторів для точок інтересу
     Arguments:
-        :param gray:
-        :param corners:
-        :param window_size:
+        :param grayscale: зображення у відтінках сірого
+        :param corners: координати точок інтересу
+        :param window_size: розмір вікна
     Returns:
-        returns some poop
+        descriptors (list): список патч дескрипторів та їх координати
     """
 
-    g_img_height = gray.shape[0]
-    g_img_width = gray.shape[1]
     pad = window_size // 2
 
-    p_gray = np.pad(gray, (pad,), 'constant')  # розширюємо зображення та заповнюємо його 0
+    p_gray = np.pad(grayscale, (pad,), 'constant')  # розширюємо зображення та заповнюємо його 0
 
     descriptors = []
 
@@ -230,23 +231,10 @@ def patch_descriptors(gray, corners, window_size=default_window_size):
         descriptor = np.array(neighbors).ravel()
         descriptors.append([descriptor, y, x])
 
-        # xy = num_neighbor + 1
-        # raw = p_gray[bottom:top, left:right]
-        # cv2.line(raw, (xy - 4, xy), (xy + 4, xy), (0, 0, 255), 1)
-        # cv2.line(raw, (xy, xy - 4), (xy, xy + 4), (0, 0, 255), 1)
-        # cv2.imshow('', raw)
-        # cv2.waitKey()
     return descriptors
 
 
-def add_markers(img, corners):
-    for y, x in corners:
-        cv2.line(img, (x - 4, y), (x + 4, y), (0, 0, 255), 1)
-        cv2.line(img, (x, y - 4), (x, y + 4), (0, 0, 255), 1)
-    return img
-
-
-def convolve(img, kernel):
+def convolve(img: np.ndarray, kernel):
     """
     Функція згортки
     Arguments:
@@ -255,9 +243,6 @@ def convolve(img, kernel):
     Returns:
         returns some poop
     """
-    if kernel.shape[0] % 2 != 1 or kernel.shape[1] % 2 != 1:
-        raise ValueError("Підтримуються тільки непарні числа у фільтрі")
-
     img_height = img.shape[0]  # отримуємо висоту зображення
     img_width = img.shape[1]  # Отримуємо ширину зображення
     pad_height = kernel.shape[0] // 2  # розраховуємо висоту здвигу
@@ -282,81 +267,61 @@ def convolve(img, kernel):
     return g
 
 
-def grayscale(img):
-    return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+def bgr2gray(img: np.ndarray) -> np.ndarray:
+    """
+    Функція конвертації BGR зображення у відтінки сірого
+    Arguments:
+        :param img: зображення
+    Returns:
+        img (np.ndarray): зображення у відтінках сірого
+    """
+    height, width, lol = img.shape
+    for y in range(height):  # проходимось по осі Y
+        for x in range(width):  # проходимось по осі X
+            b, g, r = img[y, x]  # за допомогою деструктуризації отримуємо яскравість кольорів пікселя
+            Y = b * 0.0722 + g * 0.7152 + r * 0.2126
+            img[y, x] = [Y, Y, Y]  # вносимо зміни у піксель
+    return img  # повертаємо оброблене зображення
+    # return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+def draw_markers(img: np.ndarray, corners: np.ndarray,
+                 color: tuple = MARKER_COLOR, thickness: int = MARKER_THICKNESS) -> np.ndarray:
+    """
+    Малює маркери за координатами
+    Arguments:
+        :param img: забраження
+        :param corners: массив координат точок інтересу
+        :param color: колір маркеру
+        :param thickness: товщина маркеру
+    Returns:
+        img (np.ndarray): зображення з нанесиними маркерами
+    """
+    for y, x in corners:
+        draw_marker(img, (x, y), color, thickness)
+    return img
 
 
-def _color_generator():
-    for color in colors:
-        yield color
+def draw_marker(img: np.ndarray, pos: tuple,
+                color: tuple = MARKER_COLOR, thickness: int = MARKER_THICKNESS) -> np.ndarray:
+    """
+    Малює маркер за координатами
+    Arguments:
+        :param img: забраження
+        :param pos: координати точоки інтересу
+        :param color: колір маркеру
+        :param thickness: товщина маркеру
+    Returns:
+        img (np.ndarray): зображення з нанесиними маркерами
+    """
+    x, y = pos
+    cv2.line(img, (x - 4, y), (x + 4, y), color, thickness)
+    cv2.line(img, (x, y - 4), (x, y + 4), color, thickness)
+    return img
 
-
-def _random_color():
-    return colors[randint(0, len(colors) - 1)]
-# def harris_detector(image_path, window_size=5, k=0.03, threshold=0.2):
-#     """
-#     My own harris detector function
-#     Arguments:
-#         :param image_path: path to image
-#         :param window_size: window size image
-#         :param k: empirical coefficient
-#         :param threshold: the value of the constraints for threshold filtering angles
-#     Returns:
-#         returns some poop
-#     """
-#
-#     img = cv2.imread(image_path)  # Зчитаємо зображення
-#
-#     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Переводимо зображення У відтінки сірого
-#
-#     img_gaussian = cv2.GaussianBlur(gray, (5, 5), 0.5)  # Згорткою шукаємо Ix, Iy через DoG
-#
-#     #   Step 1 - Calculate the x e y image derivatives (dx e dy)
-#     # dx = cv2.Sobel(img_gaussian, cv2.CV_64F, 1, 0, ksize=window_size)
-#     # dy = cv2.Sobel(img_gaussian, cv2.CV_64F, 0, 1, ksize=window_size)
-#
-#     # Horizontal Derivative
-#     dx = sp.signal.convolve2d(img_gaussian, [[1, 0, -1]], mode='same')
-#
-#     # Vertical Derivative
-#     dy = sp.signal.convolve2d(img_gaussian, [[1], [0], [-1]], mode='same')
-#
-#     #   Step 2 - Calculate product and second derivatives (dx2, dy2 e dxy)
-#     dx2 = np.square(dx)
-#     dy2 = np.square(dy)
-#     dxy = dx * dy
-#
-#     sx2 = cv2.GaussianBlur(dx2, (5, 5), 1)
-#     sy2 = cv2.GaussianBlur(dy2, (5, 5), 1)
-#     sxy = cv2.GaussianBlur(dxy, (5, 5), 1)
-#
-#     trace = sx2 + sy2
-#     determinant = sx2 * sy2 - sxy ** 2
-#     matrix_r = determinant - k * (trace ** 2)
-#
-#     cv2.normalize(matrix_r, matrix_r, 0, 1, cv2.NORM_MINMAX)  # нормалізуємо матрицю
-#     matrix_r = skimage.feature.peak_local_max(matrix_r, min_distance=10, threshold_abs=threshold)
-#
-#     # for x in range(matrix_r.shape[0]):
-#     #     for y in range(matrix_r.shape[1]):
-#     #         cv2.line(img, (x - 4, y), (x + 4, y), (0, 0, 255), 1)
-#     #         cv2.line(img, (x, y - 4), (x, y + 4), (0, 0, 255), 1)
-#     for y, x in matrix_r:
-#         cv2.line(img, (x - 4, y), (x + 4, y), (0, 0, 255), 1)
-#         cv2.line(img, (x, y - 4), (x, y + 4), (0, 0, 255), 1)
-#
-#     # pad = window_size // 2
-#     # tmp = np.pad(gray, (6,), 'symmetric')
-#     # for x, y in matrix_r:
-#     #     lol = np.array([
-#     #         [tmp[x - 1 + pad, y - 1 + pad], tmp[x + pad, y + pad], tmp[x + 1 + pad, y - 1 + pad]],
-#     #         [tmp[x - 1 + pad, y + pad], tmp[x + pad, y + pad], tmp[x + 1 + pad, y + pad]],
-#     #         [tmp[x - 1 + pad, y + 1 + pad], tmp[x + pad, y + pad], tmp[x + 1 + pad, y + 1 + pad]]
-#     #     ])
-#
-#     cv2.imwrite('gg.jpg', img)
-#     # cv2.imshow('', img)
-#     # cv2.waitKey()
-#
-#     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)), plt.title("harris detector")
-#     plt.waitforbuttonpress()
+def _random_color() -> tuple:
+    """
+    Генератор випадкових кольорів
+    Returns:
+        color (tuple): колір у форматі RGB
+    """
+    return COLORS[randint(0, len(COLORS) - 1)]

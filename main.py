@@ -4,9 +4,9 @@ import numpy as np
 # from own_cv2 import harris_detector
 import own_cv2 as own
 
-# original_img = cv2.imread('patterns/Image.jpg')
-# # other_img = cv2.imread('patterns/Image_1.jpg')
-# other_img = cv2.imread('patterns/Image.jpg')
+# original_img = cv2.imread('patterns/Image1.jpg')
+# other_img = cv2.imread('patterns/Image2.jpg')
+
 
 # original_img = cv2.imread('patterns/Image.jpg')
 # other_img = cv2.imread('images/Image.jpg')
@@ -14,15 +14,11 @@ import own_cv2 as own
 original_img = cv2.imread('desk/Image-00.jpg')
 other_img = cv2.imread('desk/Image-01.jpg')
 
+original_img_corners = own.harris_detector(original_img)
+other_img_corners = own.harris_detector(other_img)
 
-grayscale_original_img = own.grayscale(original_img)
-grayscale_other_img = own.grayscale(other_img)
-
-original_img_corners = own.harris_detector(grayscale_original_img, nms_min_distance=5)
-other_img_corners = own.harris_detector(grayscale_other_img, nms_min_distance=5)
-
-descriptors_original_image = own.patch_descriptors(grayscale_original_img, original_img_corners)
-descriptors_other_image = own.patch_descriptors(grayscale_other_img, other_img_corners)
+descriptors_original_image = own.patch_descriptors(cv2.cvtColor(original_img, cv2.COLOR_BGR2GRAY), original_img_corners)
+descriptors_other_image = own.patch_descriptors(cv2.cvtColor(other_img, cv2.COLOR_BGR2GRAY), other_img_corners)
 
 matches = own.match_descriptors(descriptors_original_image, descriptors_other_image)
 
@@ -30,7 +26,8 @@ own.draw_matches(original_img, other_img, matches)
 
 
 # print(matches)
-cv2.imshow(f'Corners', own.add_markers(original_img, original_img_corners))
+cv2.imshow(f'Corners1', own.draw_markers(original_img, original_img_corners))
+cv2.imshow(f'Corners2', own.draw_markers(other_img, other_img_corners))
 cv2.waitKey()
 
 
