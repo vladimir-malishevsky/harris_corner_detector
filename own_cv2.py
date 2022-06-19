@@ -61,7 +61,7 @@ TEXT_SCALE = 1  # розмір тексту
 
 def harris_detector(img: np.ndarray, window_size: int = WINDOW_SIZE,
                     k: int = K, sigma: float = SIGMA,
-                    threshold: int = None, nms_min_distance: int = NMS_MIN_DISTANCE) -> np.ndarray:
+                    threshold: int = None, nms_min_distance: int = NMS_MIN_DISTANCE) -> [np.ndarray]:
     """
     Функція пошуку точок інтересу (кутів)
     Arguments:
@@ -114,7 +114,7 @@ def harris_detector(img: np.ndarray, window_size: int = WINDOW_SIZE,
         threshold_abs=threshold
     )
 
-    return corners  # повертаємо координати точок інтересу
+    return corners, grayscale  # повертаємо координати точок інтересу
 
 
 def show_matches(img1: np.ndarray, img2: np.ndarray, matches: list):
