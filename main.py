@@ -22,7 +22,7 @@ descriptors_other_image = own.patch_descriptors(cv2.cvtColor(other_img, cv2.COLO
 
 matches = own.match_descriptors(descriptors_original_image, descriptors_other_image)
 
-own.draw_matches(original_img, other_img, matches)
+own.show_matches(original_img, other_img, matches)
 
 
 # print(matches)
